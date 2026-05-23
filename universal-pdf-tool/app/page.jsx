@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import Dropzone from "../components/features/Dropzone";
+// Asli features ko yahan import kar rahe hain
+import PdfMerger from "../components/features/PdfMerger";
+import OcrExtractor from "../components/features/OcrExtractor";
+
 import { 
   ArrowRightLeft, Layers, Minimize, 
   FileEdit, ScanText, Bot, Zap, Settings, ArrowRight 
@@ -10,11 +14,12 @@ import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 
 const tools = [
-  { id: "convert", name: "Universal Convert", icon: ArrowRightLeft, desc: "PDF to Word, Images, PPT & vice versa", color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-900/30" },
+  // Merge aur OCR jinka code humne likh liya hai, unhe upar rakha hai
   { id: "merge", name: "Merge & Split", icon: Layers, desc: "Combine multiple PDFs or extract pages", color: "text-emerald-500", bg: "bg-emerald-100 dark:bg-emerald-900/30" },
+  { id: "ocr", name: "OCR Extractor", icon: ScanText, desc: "Extract text from scanned documents", color: "text-rose-500", bg: "bg-rose-100 dark:bg-rose-900/30" },
+  { id: "convert", name: "Universal Convert", icon: ArrowRightLeft, desc: "PDF to Word, Images, PPT & vice versa", color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-900/30" },
   { id: "compress", name: "Compress PDF", icon: Minimize, desc: "Reduce file size without losing quality", color: "text-amber-500", bg: "bg-amber-100 dark:bg-amber-900/30" },
   { id: "edit", name: "Advanced Edit", icon: FileEdit, desc: "Add text, signatures, watermarks & passwords", color: "text-purple-500", bg: "bg-purple-100 dark:bg-purple-900/30" },
-  { id: "ocr", name: "OCR Extractor", icon: ScanText, desc: "Extract text from scanned documents", color: "text-rose-500", bg: "bg-rose-100 dark:bg-rose-900/30" },
   { id: "ai", name: "AI PDF Chat", icon: Bot, desc: "Summarize & ask questions to your PDF", color: "text-indigo-500", bg: "bg-indigo-100 dark:bg-indigo-900/30" },
 ];
 
@@ -23,20 +28,15 @@ export default function HomePage() {
   const [files, setFiles] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleProcess = async () => {
-    if (files.length === 0) {
-      toast.error("Please upload at least one file first.");
-      return;
-    }
-
+  // Yeh baaki tools ke liye dummy function hai jo abhi poore nahi hue
+  const handleDummyProcess = async () => {
+    if (files.length === 0) return;
     setIsProcessing(true);
     const toastId = toast.loading(`Processing with ${activeTool.name}...`);
-    
-    // Yahan aage chalker hum exact tools ke functions connect karenge
     setTimeout(() => {
       setIsProcessing(false);
-      toast.success("Task completed successfully!", { id: toastId });
-    }, 2500);
+      toast.error("This specific tool is still under development!", { id: toastId });
+    }, 2000);
   };
 
   return (
@@ -117,14 +117,27 @@ export default function HomePage() {
             />
           </div>
 
-          {files.length > 0 && (
+          {/* DYNAMIC RENDERING: Asli Tools yahan connect ho rahe hain */}
+          
+          {/* Agar Merge tool select hai aur file upload hui hai, toh PdfMerger dikhao */}
+          {files.length > 0 && activeTool.id === 'merge' && (
+            <PdfMerger files={files} onComplete={() => setFiles([])} />
+          )}
+
+          {/* Agar OCR tool select hai aur file upload hui hai, toh OcrExtractor dikhao */}
+          {files.length > 0 && activeTool.id === 'ocr' && (
+            <OcrExtractor files={files} />
+          )}
+
+          {/* Baaki bache hue tools ke liye temporary dummy button */}
+          {files.length > 0 && !['merge', 'ocr'].includes(activeTool.id) && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-end"
             >
               <button 
-                onClick={handleProcess}
+                onClick={handleDummyProcess}
                 disabled={isProcessing}
                 className={`flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white transition-all shadow-md hover:shadow-lg ${
                   isProcessing 
@@ -146,7 +159,6 @@ export default function HomePage() {
           )}
         </motion.div>
       </div>
-
     </div>
   );
 }
