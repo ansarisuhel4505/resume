@@ -1,61 +1,52 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(request) {
   try {
     const body = await request.json();
     const { prompt, pdfText } = body;
 
-    if (!prompt || !pdfText) {
-      return NextResponse.json({ error: 'Prompt and PDF text are required.' }, { status: 400 });
+    if (!prompt) {
+      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-
+    // Vercel se aapki secret key yahan aayegi
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      // Fallback response so the app doesn't crash if key is missing during testing
       return NextResponse.json({ 
-        reply: "System Note: Please add OPENAI_API_KEY in Vercel Environment Variables to enable live AI responses. \n\nI received your text: " + pdfText.substring(0, 50) + "..."
-      });
+        error: "Server Error: GEMINI_API_KEY is not configured in Vercel settings." 
+      }, { status: 500 });
     }
 
-    // Standard fetch call to OpenAI API (Works perfectly on Vercel Edge/Serverless)
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          { 
-            role: 'system', 
-            content: 'You are a helpful assistant. Answer questions based ONLY on the provided PDF text.' 
-          },
-          { 
-            role: 'user', 
-            content: `PDF Text: ${pdfText}\n\nUser Question: ${prompt}` 
-          }
-        ],
-        temperature: 0.3,
-      })
-    });
+    // Initialize Gemini API
+    const genAI = new GoogleGenerativeAI(apiKey);
+    // Hum gemini-1.5-flash use kar rahe hain kyunki ye text aur chat ke liye sabse fast hai
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const data = await aiResponse.json();
+    // AI ko PDF ka data aur user ka sawal ek sath bhejna
+    const fullPrompt = `You are a helpful and intelligent document assistant. 
+Here is the text extracted from a user's PDF document:
 
-    if (!aiResponse.ok) {
-      throw new Error(data.error?.message || 'Failed to fetch AI response');
-    }
+--- START OF PDF CONTENT ---
+${pdfText || "No PDF text provided."}
+--- END OF PDF CONTENT ---
 
-    return NextResponse.json({ 
-      success: true, 
-      reply: data.choices[0].message.content 
-    }, { status: 200 });
+User's Question: ${prompt}
+
+Please answer the user's question accurately based ONLY on the provided PDF text. If the answer is not present in the text, politely inform the user that the information is missing from the document. Keep the response clean, well-formatted, and professional.`;
+
+    // AI se answer generate karwana
+    const result = await model.generateContent(fullPrompt);
+    const response = await result.response;
+    const text = response.text();
+
+    // Frontend ko answer wapas bhejna
+    return NextResponse.json({ reply: text }, { status: 200 });
 
   } catch (error) {
-    console.error('AI Chat Error:', error);
+    console.error("Gemini API Error:", error);
     return NextResponse.json({ 
-      error: 'AI is currently unavailable. Please check your API key.' 
+      error: "AI failed to process the request. It might be due to a server overload or invalid API key." 
     }, { status: 500 });
   }
 }
