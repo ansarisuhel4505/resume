@@ -1,56 +1,75 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRightLeft, Download, Loader2, FileType2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { saveAs } from 'file-saver';
 import { motion } from 'framer-motion';
 
 export default function FileConverter({ files }) {
   const [isConverting, setIsConverting] = useState(false);
   const [targetFormat, setTargetFormat] = useState('');
+  const [availableFormats, setAvailableFormats] = useState([]);
+
+  // Apna custom logic: Konsi file kisme convert ho sakti hai humare native server par
+  useEffect(() => {
+    if (files.length === 0) return;
+    const file = files[0];
+    const name = file.name.toLowerCase();
+    
+    if (file.type.startsWith('image/') || name.endsWith('.txt')) {
+      setAvailableFormats([{ value: 'pdf', label: 'PDF Document (.pdf)' }]);
+      setTargetFormat('pdf');
+    } else if (name.endsWith('.docx') || name.endsWith('.pdf')) {
+      setAvailableFormats([{ value: 'txt', label: 'Plain Text (.txt)' }]);
+      setTargetFormat('txt');
+    } else if (name.endsWith('.xlsx') || name.endsWith('.csv')) {
+      setAvailableFormats([{ value: 'json', label: 'JSON Data (.json)' }]);
+      setTargetFormat('json');
+    } else {
+      setAvailableFormats([]);
+      setTargetFormat('');
+    }
+  }, [files]);
 
   const handleConvert = async () => {
-    if (files.length === 0) {
-      toast.error("Please upload a file.");
-      return;
-    }
-    if (!targetFormat.trim()) {
-      toast.error("Please enter a target format (e.g., pdf, mp4, mp3).");
+    if (files.length === 0 || !targetFormat) {
+      toast.error("Invalid file or target format.");
       return;
     }
 
     const file = files[0];
     setIsConverting(true);
-    const toastId = toast.loading(`Converting ${file.name} to ${targetFormat.toUpperCase()}...`);
+    const toastId = toast.loading(`Converting natively: ${file.name} to ${targetFormat.toUpperCase()}...`);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('targetFormat', targetFormat.replace('.', '').trim()); // Remove dot if user adds it
+      formData.append('targetFormat', targetFormat);
 
       const response = await fetch('/api/convert', {
         method: 'POST',
         body: formData,
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || "Failed to convert file.");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to convert file.");
       }
 
-      // Automatically trigger download using the returned CloudConvert URL
-      const a = document.createElement('a');
-      a.href = data.downloadUrl;
-      a.download = data.fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      if (targetFormat === 'json') {
+        const data = await response.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        saveAs(blob, `native-converted-${file.name.split('.')[0]}.json`);
+      } else {
+        const blob = await response.blob();
+        saveAs(blob, `native-converted-${file.name.split('.')[0]}.${targetFormat}`);
+      }
       
-      toast.success("Conversion successful! Download starting...", { id: toastId });
+      toast.success("Conversion successful!", { id: toastId });
     } catch (error) {
       console.error(error);
-      toast.error(error.message, { id: toastId, duration: 6000 });
+      toast.error(error.message, { id: toastId });
     } finally {
       setIsConverting(false);
     }
@@ -64,24 +83,32 @@ export default function FileConverter({ files }) {
     >
       <ArrowRightLeft className="text-blue-500 w-12 h-12 mb-4" />
       <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 truncate max-w-xs text-center">
-        Universal File: {files[0]?.name}
+        Convert: {files[0]?.name}
       </h3>
 
-      <div className="w-full max-w-xs mb-6 flex flex-col gap-2">
-        <label className="text-sm font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2">
-          <FileType2 size={16} /> Enter ANY Target Format:
-        </label>
-        <input 
-          type="text"
-          placeholder="e.g., pdf, mp4, mp3, docx, png"
-          value={targetFormat}
-          onChange={(e) => setTargetFormat(e.target.value)}
-          className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-darkCard text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-primary uppercase"
-        />
-        <p className="text-xs text-slate-500 text-center mt-1">
-          Powered by CloudConvert. Supports 200+ formats.
+      {availableFormats.length > 0 ? (
+        <div className="w-full max-w-xs mb-6 flex flex-col gap-2">
+          <label className="text-sm font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2">
+            <FileType2 size={16} /> Select Target Format:
+          </label>
+          <select 
+            value={targetFormat}
+            onChange={(e) => setTargetFormat(e.target.value)}
+            className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-darkCard text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-primary"
+          >
+            {availableFormats.map(fmt => (
+              <option key={fmt.value} value={fmt.value}>{fmt.label}</option>
+            ))}
+          </select>
+          <p className="text-xs text-emerald-500 text-center font-medium mt-1">
+            Running 100% locally on your server.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-red-500 mb-6 text-center bg-red-50 p-3 rounded-lg border border-red-200">
+          Sorry, converting this specific format requires external APIs or heavy servers. Our native code handles Docs, PDFs, and Images.
         </p>
-      </div>
+      )}
 
       <button
         onClick={handleConvert}
