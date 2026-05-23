@@ -28,11 +28,13 @@ export default function FileConverter({ files }) {
         { value: 'doc', label: 'Word Document (.doc)' }
       ];
     } 
-    // 2. TEXT Files
+    // 2. TEXT Files (ADDED EXCEL AND PPT OPTIONS)
     else if (name.endsWith('.txt')) {
       formats = [
         { value: 'pdf', label: 'PDF Document (.pdf)' },
         { value: 'doc', label: 'Word Document (.doc)' },
+        { value: 'csv', label: 'Excel / CSV (.csv)' },
+        { value: 'ppt', label: 'PowerPoint (.ppt)' },
         { value: 'json', label: 'JSON Data (.json)' }
       ];
     } 
@@ -57,7 +59,7 @@ export default function FileConverter({ files }) {
       formats = [
         { value: 'pdf', label: 'PDF Document (.pdf)' },
         { value: 'json', label: 'JSON Data (.json)' },
-        { value: 'csv', label: 'CSV File (.csv)' }
+        { value: 'txt', label: 'Plain Text (.txt)' }
       ];
     } 
     // 6. PPT (PowerPoint) Files
@@ -145,7 +147,33 @@ export default function FileConverter({ files }) {
         return;
       }
 
-      // 3. SERVER-SIDE CONVERSIONS (Bhejna backend par)
+      // 3. TEXT TO PPT (POWERPOINT) NATIVE CONVERSION
+      if (targetFormat === 'ppt' && file.name.toLowerCase().endsWith('.txt')) {
+        const text = await file.text();
+        const pptHtml = `
+          <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:p='urn:schemas-microsoft-com:office:powerpoint' xmlns='http://www.w3.org/TR/REC-html40'>
+          <head><meta charset='utf-8'><title>Export to PPT</title></head>
+          <body><div style="font-size: 24px; padding: 20px;">${text.replace(/\n/g, '<br>')}</div></body>
+          </html>
+        `;
+        const blob = new Blob(['\ufeff', pptHtml], { type: 'application/vnd.ms-powerpoint' });
+        triggerDownload(blob, file.name, 'ppt');
+        toast.success("Converted to PowerPoint format!", { id: toastId });
+        setIsConverting(false);
+        return;
+      }
+
+      // 4. TEXT TO EXCEL/CSV NATIVE CONVERSION
+      if (targetFormat === 'csv' && file.name.toLowerCase().endsWith('.txt')) {
+        const text = await file.text();
+        const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+        triggerDownload(blob, file.name, 'csv');
+        toast.success("Converted to Excel/CSV format!", { id: toastId });
+        setIsConverting(false);
+        return;
+      }
+
+      // 5. SERVER-SIDE CONVERSIONS (Bhejna backend par baaki formats ke liye)
       const formData = new FormData();
       formData.append('file', file);
       formData.append('targetFormat', targetFormat);
