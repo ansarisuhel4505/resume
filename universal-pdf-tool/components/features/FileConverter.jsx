@@ -10,7 +10,7 @@ export default function FileConverter({ files }) {
   const [targetFormat, setTargetFormat] = useState('');
   const [availableFormats, setAvailableFormats] = useState([]);
 
-  // DYNAMIC DROPDOWN ENGINE: Har daily use file ke hisaab se options dikhayega
+  // SAARE OPTIONS KA MATRIX: Kisi bhi file par saare options samne aayenge
   useEffect(() => {
     if (files.length === 0) return;
     const file = files[0];
@@ -19,60 +19,53 @@ export default function FileConverter({ files }) {
     
     let formats = [];
 
-    // 1. IMAGE Files
     if (type.startsWith('image/')) {
       formats = [
         { value: 'pdf', label: 'PDF Document (.pdf)' },
         { value: 'png', label: 'PNG Image (.png)' },
         { value: 'jpeg', label: 'JPG Image (.jpg)' },
-        { value: 'doc', label: 'Word Document (.doc)' }
+        { value: 'webp', label: 'WEBP Image (.webp)' },
+        { value: 'docx', label: 'Word Document (.docx)' }
       ];
-    } 
-    // 2. TEXT Files (ADDED EXCEL AND PPT OPTIONS)
-    else if (name.endsWith('.txt')) {
+    } else if (name.endsWith('.txt')) {
       formats = [
         { value: 'pdf', label: 'PDF Document (.pdf)' },
-        { value: 'doc', label: 'Word Document (.doc)' },
-        { value: 'csv', label: 'Excel / CSV (.csv)' },
-        { value: 'ppt', label: 'PowerPoint (.ppt)' },
-        { value: 'json', label: 'JSON Data (.json)' }
+        { value: 'docx', label: 'Word Document (.docx)' },
+        { value: 'xlsx', label: 'Excel Sheet (.xlsx)' },
+        { value: 'csv', label: 'CSV Format (.csv)' },
+        { value: 'json', label: 'JSON Structure (.json)' }
       ];
-    } 
-    // 3. WORD Files
-    else if (name.endsWith('.docx') || name.endsWith('.doc')) {
+    } else if (name.endsWith('.docx') || name.endsWith('.doc')) {
       formats = [
         { value: 'pdf', label: 'PDF Document (.pdf)' },
-        { value: 'txt', label: 'Plain Text (.txt)' }
+        { value: 'txt', label: 'Plain Text (.txt)' },
+        { value: 'json', label: 'JSON Hierarchy (.json)' }
       ];
-    } 
-    // 4. PDF Files
-    else if (name.endsWith('.pdf')) {
+    } else if (name.endsWith('.pdf')) {
       formats = [
         { value: 'docx', label: 'Word Document (.docx)' },
         { value: 'txt', label: 'Plain Text (.txt)' },
-        { value: 'jpeg', label: 'JPG Images (.jpg)' },
-        { value: 'pptx', label: 'PowerPoint (.pptx)' }
+        { value: 'json', label: 'JSON Structural Data (.json)' }
       ];
-    } 
-    // 5. EXCEL Files
-    else if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) {
+    } else if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) {
+      formats = [
+        { value: 'pdf', label: 'PDF Table Document (.pdf)' },
+        { value: 'json', label: 'JSON Dataset (.json)' },
+        { value: 'csv', label: 'CSV Comma Separated (.csv)' },
+        { value: 'xlsx', label: 'Excel Workbook (.xlsx)' },
+        { value: 'txt', label: 'Tab Delimited Text (.txt)' }
+      ];
+    } else if (name.endsWith('.pptx') || name.endsWith('.ppt')) {
+      formats = [
+        { value: 'pdf', label: 'PDF Presentation (.pdf)' },
+        { value: 'txt', label: 'Plain Text Outline (.txt)' }
+      ];
+    } else {
+      // Global Fallback matrix options
       formats = [
         { value: 'pdf', label: 'PDF Document (.pdf)' },
-        { value: 'json', label: 'JSON Data (.json)' },
-        { value: 'txt', label: 'Plain Text (.txt)' }
-      ];
-    } 
-    // 6. PPT (PowerPoint) Files
-    else if (name.endsWith('.pptx') || name.endsWith('.ppt')) {
-      formats = [
-        { value: 'pdf', label: 'PDF Document (.pdf)' },
-        { value: 'txt', label: 'Extract Text (.txt)' }
-      ];
-    }
-    // Fallback
-    else {
-      formats = [
-        { value: 'txt', label: 'Convert to Text (.txt)' }
+        { value: 'txt', label: 'Plain Text (.txt)' },
+        { value: 'docx', label: 'Word Document (.docx)' }
       ];
     }
 
@@ -80,12 +73,11 @@ export default function FileConverter({ files }) {
     setTargetFormat(formats[0]?.value || '');
   }, [files]);
 
-  // Helper function to auto-download generated files
   const triggerDownload = (blob, originalName, extension) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `converted-${originalName.split('.')[0]}.${extension}`;
+    a.download = `universal-converted-${originalName.split('.')[0]}.${extension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -94,16 +86,16 @@ export default function FileConverter({ files }) {
 
   const handleConvert = async () => {
     if (files.length === 0 || !targetFormat) {
-      toast.error("Invalid file or target format.");
+      toast.error("Invalid file selection.");
       return;
     }
 
     const file = files[0];
     setIsConverting(true);
-    const toastId = toast.loading(`Converting to ${targetFormat.toUpperCase()}...`);
+    const toastId = toast.loading(`Universal Engine converting to ${targetFormat.toUpperCase()}...`);
 
     try {
-      // 1. FAST NATIVE IMAGE CONVERSION IN BROWSER
+      // Client-side instant conversion fallback for speed (Images to Images)
       if (file.type.startsWith('image/') && ['png', 'jpeg', 'webp'].includes(targetFormat)) {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -117,10 +109,10 @@ export default function FileConverter({ files }) {
             
             canvas.toBlob((blob) => {
               if (blob) {
-                triggerDownload(blob, file.name, targetFormat === 'jpeg' ? 'jpg' : targetFormat);
-                toast.success("Image converted locally!", { id: toastId });
+                triggerDownload(blob, file.name, targetFormat);
+                toast.success("Conversion successful!", { id: toastId });
               } else {
-                toast.error("Image conversion failed.", { id: toastId });
+                toast.error("Local render failed.", { id: toastId });
               }
               setIsConverting(false);
             }, `image/${targetFormat}`, 1.0);
@@ -131,49 +123,7 @@ export default function FileConverter({ files }) {
         return; 
       }
 
-      // 2. TEXT TO MS WORD NATIVE CONVERSION
-      if (targetFormat === 'doc' && file.name.toLowerCase().endsWith('.txt')) {
-        const text = await file.text();
-        const wordHtml = `
-          <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-          <head><meta charset='utf-8'><title>Export to Word</title></head>
-          <body>${text.replace(/\n/g, '<br>')}</body>
-          </html>
-        `;
-        const blob = new Blob(['\ufeff', wordHtml], { type: 'application/msword' });
-        triggerDownload(blob, file.name, 'doc');
-        toast.success("Converted to Word format!", { id: toastId });
-        setIsConverting(false);
-        return;
-      }
-
-      // 3. TEXT TO PPT (POWERPOINT) NATIVE CONVERSION
-      if (targetFormat === 'ppt' && file.name.toLowerCase().endsWith('.txt')) {
-        const text = await file.text();
-        const pptHtml = `
-          <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:p='urn:schemas-microsoft-com:office:powerpoint' xmlns='http://www.w3.org/TR/REC-html40'>
-          <head><meta charset='utf-8'><title>Export to PPT</title></head>
-          <body><div style="font-size: 24px; padding: 20px;">${text.replace(/\n/g, '<br>')}</div></body>
-          </html>
-        `;
-        const blob = new Blob(['\ufeff', pptHtml], { type: 'application/vnd.ms-powerpoint' });
-        triggerDownload(blob, file.name, 'ppt');
-        toast.success("Converted to PowerPoint format!", { id: toastId });
-        setIsConverting(false);
-        return;
-      }
-
-      // 4. TEXT TO EXCEL/CSV NATIVE CONVERSION
-      if (targetFormat === 'csv' && file.name.toLowerCase().endsWith('.txt')) {
-        const text = await file.text();
-        const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
-        triggerDownload(blob, file.name, 'csv');
-        toast.success("Converted to Excel/CSV format!", { id: toastId });
-        setIsConverting(false);
-        return;
-      }
-
-      // 5. SERVER-SIDE CONVERSIONS (Bhejna backend par baaki formats ke liye)
+      // Baaki saari files Direct Backend Engine sambhalega
       const formData = new FormData();
       formData.append('file', file);
       formData.append('targetFormat', targetFormat);
@@ -185,7 +135,7 @@ export default function FileConverter({ files }) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Server failed to convert this heavy format natively without external APIs.");
+        throw new Error(errorData.error || "Server Native Engine error.");
       }
 
       let blob;
@@ -211,32 +161,32 @@ export default function FileConverter({ files }) {
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mt-6 flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700"
+      className="w-full mt-6 flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700"
     >
       <ArrowRightLeft className="text-blue-500 w-12 h-12 mb-4" />
       <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 truncate max-w-xs text-center">
-        Universal Convert: {files[0]?.name}
+        Universal Conversion Matrix
       </h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 text-center">
+        Active File: <span className="font-semibold text-primary">{files[0]?.name}</span>
+      </p>
 
-      {availableFormats.length > 0 ? (
+      {availableFormats.length > 0 && (
         <div className="w-full max-w-xs mb-6 flex flex-col gap-2">
           <label className="text-sm font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2">
-            <FileText size={16} /> Select Target Format:
+            <FileText size={16} /> Target Output Format:
           </label>
           <select 
             value={targetFormat}
             onChange={(e) => setTargetFormat(e.target.value)}
-            className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-darkCard text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-primary font-medium"
+            className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-darkCard text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-primary font-semibold"
           >
             {availableFormats.map(fmt => (
               <option key={fmt.value} value={fmt.value}>{fmt.label}</option>
             ))}
           </select>
-          <p className="text-xs text-emerald-500 text-center font-medium mt-1">
-            Multiple native formats unlocked.
-          </p>
         </div>
-      ) : null}
+      )}
 
       <button
         onClick={handleConvert}
@@ -249,11 +199,11 @@ export default function FileConverter({ files }) {
       >
         {isConverting ? (
           <>
-            <Loader2 className="animate-spin" size={20} /> Processing...
+            <Loader2 className="animate-spin" size={20} /> Processing Stream...
           </>
         ) : (
           <>
-            <Download size={20} /> Convert & Download
+            <Download size={20} /> Convert & Download Now
           </>
         )}
       </button>
