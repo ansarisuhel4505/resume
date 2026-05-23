@@ -4,7 +4,7 @@ import { useState } from "react";
 import Dropzone from "../components/features/Dropzone";
 import { 
   ArrowRightLeft, Layers, Minimize, 
-  FileEdit, ScanText, Bot, Zap, Settings 
+  FileEdit, ScanText, Bot, Zap, Settings, ArrowRight 
 } from "lucide-react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
@@ -32,8 +32,7 @@ export default function HomePage() {
     setIsProcessing(true);
     const toastId = toast.loading(`Processing with ${activeTool.name}...`);
     
-    // Yahan hum aage chalker API routes aur Client-side PDF functions call karenge
-    // Abhi ke liye hum ek dummy success timeout de rahe hain UI flow check karne ke liye
+    // Yahan aage chalker hum exact tools ke functions connect karenge
     setTimeout(() => {
       setIsProcessing(false);
       toast.success("Task completed successfully!", { id: toastId });
