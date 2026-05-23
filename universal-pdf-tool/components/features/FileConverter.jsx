@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ArrowRightLeft, Download, Loader2, FileType2 } from 'lucide-react';
+// Changed FileType2 to FileText to guarantee it exists in all versions
+import { ArrowRightLeft, Download, Loader2, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { saveAs } from 'file-saver';
 import { motion } from 'framer-motion';
 
 export default function FileConverter({ files }) {
@@ -57,14 +57,25 @@ export default function FileConverter({ files }) {
         throw new Error(errorData.error || "Failed to convert file.");
       }
 
+      // VANILLA JS DOWNLOAD (No third-party packages needed, 100% crash-free)
+      let blob;
       if (targetFormat === 'json') {
         const data = await response.json();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        saveAs(blob, `native-converted-${file.name.split('.')[0]}.json`);
+        blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       } else {
-        const blob = await response.blob();
-        saveAs(blob, `native-converted-${file.name.split('.')[0]}.${targetFormat}`);
+        blob = await response.blob();
       }
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const originalName = file.name.split('.')[0];
+      a.download = `native-converted-${originalName}.${targetFormat}`;
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
       
       toast.success("Conversion successful!", { id: toastId });
     } catch (error) {
@@ -89,7 +100,7 @@ export default function FileConverter({ files }) {
       {availableFormats.length > 0 ? (
         <div className="w-full max-w-xs mb-6 flex flex-col gap-2">
           <label className="text-sm font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2">
-            <FileType2 size={16} /> Select Target Format:
+            <FileText size={16} /> Select Target Format:
           </label>
           <select 
             value={targetFormat}
