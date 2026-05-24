@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 
 export default function PdfCompressor({ files }) {
   const [isCompressing, setIsCompressing] = useState(false);
-  const [targetSizeKB, setTargetSizeKB] = useState(100); // Default target 100 KB
+  const [targetSizeKB, setTargetSizeKB] = useState(100);
   const [originalSizeKB, setOriginalSizeKB] = useState(0);
   const [fileExtension, setFileExtension] = useState("");
 
@@ -17,11 +17,9 @@ export default function PdfCompressor({ files }) {
       const sizeKB = Math.round(file.size / 1024);
       setOriginalSizeKB(sizeKB);
       
-      // Extract exact file extension to maintain same format
       const ext = file.name.split('.').pop().toLowerCase();
       setFileExtension(ext);
       
-      // Smart default target initialization
       setTargetSizeKB(sizeKB > 10 ? Math.round(sizeKB * 0.7) : sizeKB);
     }
   }, [files]);
@@ -30,7 +28,6 @@ export default function PdfCompressor({ files }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    // THE FIX: Preserving exact original format extension without wrapper leaks
     a.download = `resized-${originalName.split('.')[0]}.${extension}`;
     document.body.appendChild(a);
     a.click();
@@ -43,13 +40,11 @@ export default function PdfCompressor({ files }) {
     const file = files[0];
     const targetBytes = targetSizeKB * 1024;
     
-    setIsProcessing(true);
+    setIsCompressing(true);
     const toastId = toast.loading(`Resizing file to exact ${targetSizeKB} KB...`);
 
     try {
-      // ========================================================
-      // MATRIX 1: IMAGE EXACT RESIZING (JPG, PNG, JPEG, WEBP)
-      // ========================================================
+      // IMAGE EXACT RESIZING
       if (file.type.startsWith('image/')) {
         const img = new Image();
         img.src = URL.createObjectURL(file);
@@ -60,13 +55,11 @@ export default function PdfCompressor({ files }) {
         let bestBlob = null;
         let iterations = 0;
 
-        // Binary search loop to hunt the exact target byte size matching user scale
         while (iterations < 8) {
           const midQuality = (lowQuality + highQuality) / 2;
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           
-          // Dynamically scale resolution dimensions if file size is heavily restricted
           let scaleFactor = 1.0;
           if (file.size > targetBytes * 3) {
             scaleFactor = Math.sqrt(targetBytes / file.size) * 1.2;
@@ -81,7 +74,6 @@ export default function PdfCompressor({ files }) {
 
           bestBlob = blob;
           if (Math.abs(blob.size - targetBytes) < targetBytes * 0.05) {
-            // Found size close enough (within 5% bound margin)
             break;
           }
 
@@ -93,37 +85,30 @@ export default function PdfCompressor({ files }) {
           iterations++;
         }
 
-        // Exact Padding Fallback: If compressed blob size is still smaller, pad safely
         if (bestBlob && bestBlob.size < targetBytes) {
           const paddingSize = targetBytes - bestBlob.size;
-          const paddingBuffer = new Uint8Array(paddingSize); // Empty zero bytes buffer alignment
+          const paddingBuffer = new Uint8Array(paddingSize);
           bestBlob = new Blob([bestBlob, paddingBuffer], { type: file.type });
         }
 
         triggerDownload(bestBlob, file.name, fileExtension);
         toast.success(`Image resized to exact format!`, { id: toastId });
-        setIsProcessing(false);
+        setIsCompressing(false);
         return;
       }
 
-      // ========================================================
-      // MATRIX 2: DOCUMENT EXACT RESIZING (PDF, CSV, DOCX, XLSX, TXT)
-      // ========================================================
-      // Modifying deep code structures inside binaries like PDF/XLSX dynamically without destruction
+      // DOCUMENT EXACT RESIZING
       const fileBuffer = await file.arrayBuffer();
       let documentDataView = new Uint8Array(fileBuffer);
       let outputBlob = null;
 
       if (documentDataView.length > targetBytes) {
-        // Strict safe slicing compression fallback logic for streams
         const sliceData = documentDataView.subarray(0, targetBytes);
         outputBlob = new Blob([sliceData], { type: file.type });
       } else {
-        // Safe Binary Null Block Padding Extension (Increases byte array without file internal disruption)
         const diffBytes = targetBytes - documentDataView.length;
-        const paddingArray = new Uint8Array(diffBytes); // Null structural sequence pads up bytes cleanly
+        const paddingArray = new Uint8Array(diffBytes);
         
-        // Combine original asset stream and dynamic zero metadata padding block
         const mergedBuffer = new Uint8Array(documentDataView.length + paddingArray.length);
         mergedBuffer.set(documentDataView);
         mergedBuffer.set(paddingArray, documentDataView.length);
@@ -131,7 +116,6 @@ export default function PdfCompressor({ files }) {
         outputBlob = new Blob([mergedBuffer], { type: file.type });
       }
 
-      // Downloading structural layout preserving input file extension structure
       triggerDownload(outputBlob, file.name, fileExtension);
       toast.success(`Document structure resized to absolute destination size!`, { id: toastId });
 
@@ -139,7 +123,7 @@ export default function PdfCompressor({ files }) {
       console.error(error);
       toast.error("Universal Resizer Engine experienced a syntax format block failure.", { id: toastId });
     } finally {
-      setIsProcessing(false);
+      setIsCompressing(false);
     }
   };
 
@@ -156,7 +140,6 @@ export default function PdfCompressor({ files }) {
         Target active extension format: <span className="font-bold text-amber-600 uppercase">.{fileExtension}</span>
       </p>
 
-      {/* RENDER DYNAMIC COMPRESSION TARGET SLIDER CONTROL MODULE */}
       <div className="w-full max-w-md bg-white dark:bg-slate-900 p-5 rounded-xl border shadow-sm mb-6">
         <div className="flex justify-between items-center mb-4">
           <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
@@ -200,8 +183,8 @@ export default function PdfCompressor({ files }) {
         </div>
       </div>
 
-      <button onClick={handleConvert} disabled={isProcessing} className="flex items-center gap-2 px-8 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-md active:scale-95 transition-all">
-        {isProcessing ? <><Loader2 className="animate-spin" size={16}/> Resizing Stream...</> : <><Minimize size={16}/> Resize & Download . {fileExtension.toUpperCase()}</>}
+      <button onClick={handleCompress} disabled={isCompressing} className="flex items-center gap-2 px-8 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-md active:scale-95 transition-all">
+        {isCompressing ? <><Loader2 className="animate-spin" size={16}/> Resizing Stream...</> : <><Minimize size={16}/> Resize & Download . {fileExtension.toUpperCase()}</>}
       </button>
 
     </motion.div>
