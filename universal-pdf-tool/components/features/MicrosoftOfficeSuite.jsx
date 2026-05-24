@@ -1,215 +1,240 @@
 "use client";
 
-import React, { useState } from 'react';
-// YAHAN FIX KIYA HAI: Zap ko import list me add kar diya aur unused icons hata diye
-import { Type, Table, Presentation, FileDown, Loader2, Plus, Trash2, Zap } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Type, Table as TableIcon, Presentation, FileDown, Plus, Minus, Trash2, UploadCloud, Download, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import dynamic from 'next/dynamic';
+import mammoth from 'mammoth';
 import * as xlsx from 'xlsx';
 import pptxgen from 'pptxgenjs';
 
+// Dynamically loading Quill to avoid Next.js SSR issues
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+import 'react-quill/dist/quill.snow.css';
+
 export default function MicrosoftOfficeSuite() {
   const [activeTab, setActiveTab] = useState('word');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [fileName, setFileName] = useState("My_Pro_Document");
 
-  // WORD STATE
-  const [wordData, setWordData] = useState({ title: "My Professional Document", subtitle: "Generated natively via web", content: "" });
+  // ==========================================
+  // 1. WORD EDITOR STATE & LOGIC
+  // ==========================================
+  const [wordHtml, setWordHtml] = useState("");
+  const wordInputRef = useRef(null);
 
-  // EXCEL STATE
-  const [excelRows, setExcelRows] = useState([
-    { id: 1, name: "Suhel Khan", role: "Full Stack Developer", status: "Active" },
-    { id: 2, name: "Prerna Sharma", role: "UI Designer", status: "Active" },
-  ]);
+  const quillModules = {
+    toolbar: [
+      [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'script': 'sub'}, { 'script': 'super' }],
+      [{ 'header': 1 }, { 'header': 2 }, 'blockquote', 'code-block'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1'}, { 'indent': '+1' }],
+      [{ 'direction': 'rtl' }, { 'align': [] }],
+      ['link', 'image', 'video', 'formula'],
+      ['clean']
+    ]
+  };
 
-  // PPT STATE
-  const [pptSlides, setPptSlides] = useState([
-    { id: 1, title: "Title Slide", type: "intro", text: "Introduction and subtitle", bgColor: "#4F46E5" },
-    { id: 2, title: "Content Overview", type: "body", text: "Bullet point details go here...", bgColor: "#FFFFFF" }
-  ]);
+  const loadWordFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFileName(file.name.split('.')[0]);
+    try {
+      if (file.name.endsWith('.docx')) {
+        const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+        setWordHtml(result.value);
+        toast.success("Word file loaded!");
+      }
+    } catch (err) { toast.error("Failed to load DOCX"); }
+  };
 
-  const triggerDownload = (blob, extension) => {
+  const exportWord = () => {
+    const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'></head><body>";
+    const footer = "</body></html>";
+    const blob = new Blob(['\ufeff', header + wordHtml + footer], { type: 'application/msword' });
+    triggerDownload(blob, `${fileName}.doc`);
+  };
+
+  // ==========================================
+  // 2. EXCEL GRID STATE & LOGIC (2D Array)
+  // ==========================================
+  const [excelGrid, setExcelGrid] = useState(Array.from({ length: 10 }, () => Array(5).fill("")));
+
+  const updateExcelCell = (rowIndex, colIndex, value) => {
+    const newGrid = [...excelGrid];
+    newGrid[rowIndex][colIndex] = value;
+    setExcelGrid(newGrid);
+  };
+
+  const addExcelRow = () => setExcelGrid([...excelGrid, Array(excelGrid[0].length).fill("")]);
+  const removeExcelRow = () => excelGrid.length > 1 && setExcelGrid(excelGrid.slice(0, -1));
+  
+  const addExcelCol = () => setExcelGrid(excelGrid.map(row => [...row, ""]));
+  const removeExcelCol = () => excelGrid[0].length > 1 && setExcelGrid(excelGrid.map(row => row.slice(0, -1)));
+
+  const exportExcel = () => {
+    const ws = xlsx.utils.aoa_to_sheet(excelGrid);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "Sheet1");
+    const buffer = xlsx.write(wb, { type: 'array', bookType: 'xlsx' });
+    triggerDownload(new Blob([buffer]), `${fileName}.xlsx`);
+  };
+
+  // ==========================================
+  // 3. PPT SLIDE MAKER STATE & LOGIC
+  // ==========================================
+  const [slides, setSlides] = useState([{ id: 1, title: "Click to edit title", content: "Click to edit text", bgColor: "#ffffff", titleColor: "#000000" }]);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  const addSlide = () => setSlides([...slides, { id: Date.now(), title: "New Slide", content: "Add your content here", bgColor: "#ffffff", titleColor: "#000000" }]);
+  const deleteSlide = (index) => {
+    if (slides.length > 1) {
+      setSlides(slides.filter((_, i) => i !== index));
+      setActiveSlide(0);
+    }
+  };
+
+  const updateCurrentSlide = (field, value) => {
+    const newSlides = [...slides];
+    newSlides[activeSlide][field] = value;
+    setSlides(newSlides);
+  };
+
+  const exportPpt = async () => {
+    setIsProcessing(true);
+    let pres = new pptxgen();
+    slides.forEach(s => {
+      let slide = pres.addSlide();
+      slide.background = { fill: s.bgColor.replace('#', '') };
+      slide.addText(s.title, { x: 0.5, y: 0.5, w: '90%', h: 1, fontSize: 32, bold: true, color: s.titleColor.replace('#', ''), align: pres.AlignH.center });
+      slide.addText(s.content, { x: 0.5, y: 2, w: '90%', h: 3, fontSize: 18, color: s.titleColor.replace('#', ''), align: pres.AlignH.center, valign: pres.AlignV.top });
+    });
+    const buffer = await pres.write({ outputType: 'arraybuffer' });
+    triggerDownload(new Blob([buffer]), `${fileName}.pptx`);
+    setIsProcessing(false);
+  };
+
+  // ==========================================
+  // UTILITY
+  // ==========================================
+  const triggerDownload = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `pro-edition-${new Date().getTime()}.${extension}`;
-    document.body.appendChild(a);
+    a.download = filename;
     a.click();
-    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  };
-
-  const addExcelRow = () => {
-    const newId = excelRows.length > 0 ? Math.max(...excelRows.map(r => r.id)) + 1 : 1;
-    setExcelRows([...excelRows, { id: newId, name: "", role: "", status: "" }]);
-  };
-
-  const removeExcelRow = (id) => {
-    setExcelRows(excelRows.filter(row => row.id !== id));
-  };
-
-  const handleExcelInputChange = (id, field, value) => {
-    setExcelRows(excelRows.map(row => (row.id === id ? { ...row, [field]: value } : row)));
-  };
-
-  const generateWord = async () => {
-    setIsGenerating(true);
-    const toastId = toast.loading("Generating Microsoft Word Document natively...");
-    try {
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: [
-            new Paragraph({ text: wordData.title, heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-            new Paragraph({ text: "\n", children: [new TextRun(wordData.subtitle)] }),
-            new Paragraph({ text: "\n\n" }),
-            new Paragraph({ text: wordData.content || "Placeholder content for document generation.", alignment: AlignmentType.BOTH }),
-          ],
-        }],
-      });
-      const buffer = await Packer.toBuffer(doc);
-      triggerDownload(new Blob([buffer]), 'docx');
-      toast.success("DOCX generated locally!", { id: toastId });
-    } catch (e) { 
-      toast.error("DOCX generation failed.", { id: toastId }); 
-      console.error(e);
-    }
-    finally { setIsGenerating(false); }
-  };
-
-  const generateExcel = async () => {
-    setIsGenerating(true);
-    const toastId = toast.loading("Generating Microsoft Excel natively...");
-    try {
-      const worksheet = xlsx.utils.json_to_sheet(excelRows.map(({ id, ...rest }) => rest));
-      const workbook = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(workbook, worksheet, "Employees");
-      const outBuffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-      triggerDownload(new Blob([outBuffer]), 'xlsx');
-      toast.success("XLSX generated locally!", { id: toastId });
-    } catch (e) { 
-      toast.error("XLSX generation failed.", { id: toastId }); 
-      console.error(e);
-    }
-    finally { setIsGenerating(false); }
-  };
-
-  const generatePpt = async () => {
-    setIsGenerating(true);
-    const toastId = toast.loading("Generating Microsoft PowerPoint natively...");
-    try {
-      let pres = new pptxgen();
-      pptSlides.forEach(slideData => {
-        let slide = pres.addSlide();
-        slide.background = { fill: slideData.bgColor };
-        slide.addText(slideData.title, { x: 0.5, y: 0.5, w: '90%', h: 1, fontSize: 36, bold: true, color: slideData.bgColor === "#FFFFFF" ? "000000" : "FFFFFF", align: pres.AlignH.center });
-        slide.addText(slideData.text, { x: 0.5, y: 2, w: '90%', h: 3, fontSize: 18, color: slideData.bgColor === "#FFFFFF" ? "000000" : "FFFFFF", align: pres.AlignH.left, valign: pres.AlignV.top });
-      });
-      const outBuffer = await pres.write({ outputType: 'arraybuffer' });
-      triggerDownload(new Blob([outBuffer]), 'pptx');
-      toast.success("PPTX generated locally!", { id: toastId });
-    } catch (e) { 
-      toast.error("PPTX generation failed.", { id: toastId }); 
-      console.error(e);
-    }
-    finally { setIsGenerating(false); }
+    toast.success(`${filename} downloaded successfully!`);
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white dark:bg-darkCard p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl min-h-[600px] flex flex-col">
-      <div className="flex items-center gap-3 mb-8 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <Zap className="text-primary w-8 h-8" />
-        <div>
-          <h2 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">Microsoft Office Pro Automation Suite</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Pure native conversion through SDKs without third-party heavy dependency.</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white dark:bg-slate-900 rounded-2xl border shadow-xl flex flex-col h-[800px] overflow-hidden">
+      
+      {/* HEADER & TABS */}
+      <div className="bg-slate-100 dark:bg-slate-800 border-b p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex gap-2">
+          <button onClick={() => setActiveTab('word')} className={`px-4 py-2 rounded font-bold flex items-center gap-2 ${activeTab === 'word' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700'}`}><Type size={18}/> Word</button>
+          <button onClick={() => setActiveTab('excel')} className={`px-4 py-2 rounded font-bold flex items-center gap-2 ${activeTab === 'excel' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700'}`}><TableIcon size={18}/> Excel</button>
+          <button onClick={() => setActiveTab('ppt')} className={`px-4 py-2 rounded font-bold flex items-center gap-2 ${activeTab === 'ppt' ? 'bg-orange-600 text-white' : 'bg-white text-slate-700'}`}><Presentation size={18}/> PPT</button>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <input type="text" value={fileName} onChange={e => setFileName(e.target.value)} className="px-3 py-2 border rounded outline-none font-semibold text-sm w-full sm:w-48" placeholder="File Name" />
         </div>
       </div>
 
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-900/50 p-1 rounded-xl mb-8 border border-slate-200 dark:border-slate-700">
-        {[{ id: 'word', icon: Type, name: 'Word Gen' }, { id: 'excel', icon: Table, name: 'Excel Sheets' }, { id: 'ppt', icon: Presentation, name: 'PPT Slides' }].map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 flex items-center justify-center gap-2.5 py-3 rounded-lg font-bold text-sm transition-colors ${isActive ? 'bg-primary text-white shadow' : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200'}`}>
-              <Icon size={18} />
-              {tab.name}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex-1 overflow-y-auto space-y-6">
+      <div className="flex-1 overflow-hidden relative bg-slate-50 dark:bg-slate-900">
+        
+        {/* ======================= WORD UI ======================= */}
         {activeTab === 'word' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            <input type="text" value={wordData.title} onChange={e => setWordData({ ...wordData, title: e.target.value })} placeholder="Document Title" className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-darkCard text-lg font-bold" />
-            <input type="text" value={wordData.subtitle} onChange={e => setWordData({ ...wordData, subtitle: e.target.value })} placeholder="Document Subtitle" className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-darkCard" />
-            <textarea value={wordData.content} onChange={e => setWordData({ ...wordData, content: e.target.value })} placeholder="Add your content here..." rows={10} className="w-full p-4 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 resize-none" />
-            <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
-              <button onClick={generateWord} disabled={isGenerating} className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700">
-                {isGenerating ? <Loader2 className="animate-spin" /> : <FileDown />} Generate DOCX
-              </button>
+          <div className="flex flex-col h-full">
+            <div className="flex justify-between p-2 bg-white border-b">
+              <div>
+                <input type="file" accept=".docx" ref={wordInputRef} onChange={loadWordFile} className="hidden" />
+                <button onClick={() => wordInputRef.current.click()} className="px-3 py-1 bg-slate-200 rounded text-sm font-bold flex items-center gap-2"><UploadCloud size={16}/> Load DOCX</button>
+              </div>
+              <button onClick={exportWord} className="px-4 py-1 bg-blue-600 text-white rounded text-sm font-bold flex items-center gap-2"><Download size={16}/> Save DOC</button>
             </div>
-          </motion.div>
+            <div className="flex-1 bg-white overflow-y-auto">
+              <style jsx global>{`.ql-container { font-size: 16px; border: none !important; } .ql-toolbar { border: none !important; border-bottom: 1px solid #ccc !important; position: sticky; top: 0; z-index: 10; background: white; }`}</style>
+              <ReactQuill theme="snow" value={wordHtml} onChange={setWordHtml} modules={quillModules} className="h-full pb-12" />
+            </div>
+          </div>
         )}
 
+        {/* ======================= EXCEL UI ======================= */}
         {activeTab === 'excel' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h4 className="font-bold text-slate-700 dark:text-slate-300">Native Excel Reporting</h4>
-              <button onClick={addExcelRow} className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-sm bg-primary text-white">
-                <Plus size={16} /> Add Row
-              </button>
+          <div className="flex flex-col h-full p-4">
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button onClick={addExcelRow} className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded text-sm font-bold flex items-center"><Plus size={14}/> Row</button>
+              <button onClick={removeExcelRow} className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm font-bold flex items-center"><Minus size={14}/> Row</button>
+              <button onClick={addExcelCol} className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded text-sm font-bold flex items-center ml-4"><Plus size={14}/> Col</button>
+              <button onClick={removeExcelCol} className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm font-bold flex items-center"><Minus size={14}/> Col</button>
+              <button onClick={exportExcel} className="ml-auto px-4 py-1 bg-emerald-600 text-white rounded text-sm font-bold flex items-center gap-2"><Download size={16}/> Save XLSX</button>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    {['Name', 'Role', 'Status', 'Action'].map(header => <th key={header} className="text-left p-4 font-bold text-slate-700 dark:text-slate-300">{header}</th>)}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {excelRows.map(row => (
-                    <tr key={row.id}>
-                      <td className="p-3"><input type="text" value={row.name} onChange={e => handleExcelInputChange(row.id, 'name', e.target.value)} className="w-full bg-transparent p-1 outline-none" /></td>
-                      <td className="p-3"><input type="text" value={row.role} onChange={e => handleExcelInputChange(row.id, 'role', e.target.value)} className="w-full bg-transparent p-1 outline-none" /></td>
-                      <td className="p-3"><input type="text" value={row.status} onChange={e => handleExcelInputChange(row.id, 'status', e.target.value)} className="w-full bg-transparent p-1 outline-none" /></td>
-                      <td className="p-3"><button onClick={() => removeExcelRow(row.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button></td>
+            <div className="flex-1 overflow-auto bg-white border shadow-inner">
+              <table className="border-collapse w-max min-w-full">
+                <tbody>
+                  {excelGrid.map((row, rIndex) => (
+                    <tr key={rIndex}>
+                      {row.map((cell, cIndex) => (
+                        <td key={cIndex} className="border border-slate-300 p-0">
+                          <input 
+                            type="text" 
+                            value={cell} 
+                            onChange={(e) => updateExcelCell(rIndex, cIndex, e.target.value)}
+                            className="w-32 h-8 px-2 outline-none focus:bg-blue-50 text-sm"
+                          />
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
-              <button onClick={generateExcel} disabled={isGenerating} className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700">
-                {isGenerating ? <Loader2 className="animate-spin" /> : <FileDown />} Generate XLSX
-              </button>
-            </div>
-          </motion.div>
+          </div>
         )}
 
+        {/* ======================= PPT UI ======================= */}
         {activeTab === 'ppt' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            <h4 className="font-bold text-slate-700 dark:text-slate-300">Microsoft PPT Presentation Builder</h4>
-            {pptSlides.map((slide, idx) => (
-                <div key={slide.id} className="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 relative">
-                    <span className="absolute top-2 right-3 text-xs font-bold text-slate-400">Slide {idx+1}</span>
-                    <input type="text" value={slide.title} onChange={e => setPptSlides(pptSlides.map(s => s.id === slide.id ? {...s, title: e.target.value} : s))} placeholder="Slide Title" className="w-full bg-transparent font-bold outline-none border-b border-slate-300 dark:border-slate-600 pb-2"/>
-                    <textarea value={slide.text} onChange={e => setPptSlides(pptSlides.map(s => s.id === slide.id ? {...s, text: e.target.value} : s))} placeholder="Slide body content..." rows={4} className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-darkCard resize-none text-sm"/>
-                    <div className='flex items-center gap-3'>
-                        <label className='text-xs font-semibold'>Bg Color:</label>
-                        <input type="color" value={slide.bgColor} onChange={e => setPptSlides(pptSlides.map(s => s.id === slide.id ? {...s, bgColor: e.target.value} : s))} className='h-8 w-16 border-none cursor-pointer'/>
-                        <button onClick={() => setPptSlides(pptSlides.filter(s => s.id !== slide.id))} className="text-red-500 hover:text-red-700 text-xs ml-auto"><Trash2 size={16} /> Remove</button>
-                    </div>
+          <div className="flex h-full">
+            {/* Slide Sidebar */}
+            <div className="w-48 bg-slate-200 border-r overflow-y-auto p-2 flex flex-col gap-2">
+              {slides.map((slide, index) => (
+                <div key={slide.id} onClick={() => setActiveSlide(index)} className={`h-24 rounded border-2 cursor-pointer flex items-center justify-center text-xs font-bold p-2 text-center overflow-hidden ${activeSlide === index ? 'border-orange-500' : 'border-transparent'}`} style={{ backgroundColor: slide.bgColor, color: slide.titleColor }}>
+                  {slide.title}
                 </div>
-            ))}
-            <button onClick={() => setPptSlides([...pptSlides, {id: Date.now(), title: "New Slide", text: "New Content", bgColor: "#FFFFFF"}])} className="w-full py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-primary hover:border-primary font-bold text-sm">Add New Slide</button>
-            <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
-              <button onClick={generatePpt} disabled={isGenerating} className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white bg-orange-600 hover:bg-orange-700">
-                {isGenerating ? <Loader2 className="animate-spin" /> : <FileDown />} Generate PPTX
-              </button>
+              ))}
+              <button onClick={addSlide} className="py-2 border-2 border-dashed border-slate-400 text-slate-500 font-bold rounded flex justify-center"><Plus size={20}/></button>
             </div>
-          </motion.div>
+            
+            {/* Visual Slide Editor */}
+            <div className="flex-1 p-6 flex flex-col">
+              <div className="flex justify-between items-center mb-4 bg-white p-2 border rounded shadow-sm">
+                <div className="flex gap-4 items-center">
+                  <label className="text-sm font-bold flex items-center gap-1">BG: <input type="color" value={slides[activeSlide].bgColor} onChange={e => updateCurrentSlide('bgColor', e.target.value)} className="w-6 h-6 border-none cursor-pointer"/></label>
+                  <label className="text-sm font-bold flex items-center gap-1">Text: <input type="color" value={slides[activeSlide].titleColor} onChange={e => updateCurrentSlide('titleColor', e.target.value)} className="w-6 h-6 border-none cursor-pointer"/></label>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => deleteSlide(activeSlide)} className="px-3 py-1 bg-red-100 text-red-600 rounded text-sm font-bold flex items-center"><Trash2 size={16}/> Delete Slide</button>
+                  <button onClick={exportPpt} disabled={isProcessing} className="px-4 py-1 bg-orange-600 text-white rounded text-sm font-bold flex items-center gap-2"><Download size={16}/> Save PPTX</button>
+                </div>
+              </div>
+              
+              {/* Actual Slide Canvas */}
+              <div className="flex-1 flex items-center justify-center bg-slate-100 border-2 border-slate-300 border-dashed rounded-xl overflow-hidden">
+                <div className="w-full max-w-2xl aspect-video shadow-2xl flex flex-col items-center justify-center p-12 text-center" style={{ backgroundColor: slides[activeSlide].bgColor, color: slides[activeSlide].titleColor }}>
+                  <input type="text" value={slides[activeSlide].title} onChange={e => updateCurrentSlide('title', e.target.value)} className="w-full text-4xl font-extrabold bg-transparent text-center outline-none border-b border-transparent focus:border-white/30 mb-4" />
+                  <textarea value={slides[activeSlide].content} onChange={e => updateCurrentSlide('content', e.target.value)} className="w-full h-32 text-xl bg-transparent text-center outline-none resize-none border border-transparent focus:border-white/30" />
+                </div>
+              </div>
+            </div>
+          </div>
         )}
+
       </div>
     </motion.div>
   );
