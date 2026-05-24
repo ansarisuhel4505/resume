@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState } from 'react';
-import { MicrosoftIcon, Type, Table, Presentation, FileDown, Loader2, Plus, Trash2 } from 'lucide-react';
+// YAHAN FIX KIYA HAI: Zap ko import list me add kar diya aur unused icons hata diye
+import { Type, Table, Presentation, FileDown, Loader2, Plus, Trash2, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, AlignmentType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import * as xlsx from 'xlsx';
 import pptxgen from 'pptxgenjs';
 
@@ -53,7 +54,7 @@ export default function MicrosoftOfficeSuite() {
 
   const generateWord = async () => {
     setIsGenerating(true);
-    const toastId = toast.loading("Generating Microsoft Word Document native conversion...");
+    const toastId = toast.loading("Generating Microsoft Word Document natively...");
     try {
       const doc = new Document({
         sections: [{
@@ -69,13 +70,16 @@ export default function MicrosoftOfficeSuite() {
       const buffer = await Packer.toBuffer(doc);
       triggerDownload(new Blob([buffer]), 'docx');
       toast.success("DOCX generated locally!", { id: toastId });
-    } catch (e) { toast.error("DOCX generation failed.", { id: toastId }); }
+    } catch (e) { 
+      toast.error("DOCX generation failed.", { id: toastId }); 
+      console.error(e);
+    }
     finally { setIsGenerating(false); }
   };
 
   const generateExcel = async () => {
     setIsGenerating(true);
-    const toastId = toast.loading("Generating Microsoft Excel native conversion...");
+    const toastId = toast.loading("Generating Microsoft Excel natively...");
     try {
       const worksheet = xlsx.utils.json_to_sheet(excelRows.map(({ id, ...rest }) => rest));
       const workbook = xlsx.utils.book_new();
@@ -83,27 +87,31 @@ export default function MicrosoftOfficeSuite() {
       const outBuffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
       triggerDownload(new Blob([outBuffer]), 'xlsx');
       toast.success("XLSX generated locally!", { id: toastId });
-    } catch (e) { toast.error("XLSX generation failed.", { id: toastId }); }
+    } catch (e) { 
+      toast.error("XLSX generation failed.", { id: toastId }); 
+      console.error(e);
+    }
     finally { setIsGenerating(false); }
   };
 
   const generatePpt = async () => {
     setIsGenerating(true);
-    const toastId = toast.loading("Generating Microsoft PowerPoint native conversion...");
+    const toastId = toast.loading("Generating Microsoft PowerPoint natively...");
     try {
       let pres = new pptxgen();
       pptSlides.forEach(slideData => {
         let slide = pres.addSlide();
         slide.background = { fill: slideData.bgColor };
-        // PPT title
         slide.addText(slideData.title, { x: 0.5, y: 0.5, w: '90%', h: 1, fontSize: 36, bold: true, color: slideData.bgColor === "#FFFFFF" ? "000000" : "FFFFFF", align: pres.AlignH.center });
-        // PPT content
         slide.addText(slideData.text, { x: 0.5, y: 2, w: '90%', h: 3, fontSize: 18, color: slideData.bgColor === "#FFFFFF" ? "000000" : "FFFFFF", align: pres.AlignH.left, valign: pres.AlignV.top });
       });
       const outBuffer = await pres.write({ outputType: 'arraybuffer' });
       triggerDownload(new Blob([outBuffer]), 'pptx');
       toast.success("PPTX generated locally!", { id: toastId });
-    } catch (e) { toast.error("PPTX generation failed.", { id: toastId }); }
+    } catch (e) { 
+      toast.error("PPTX generation failed.", { id: toastId }); 
+      console.error(e);
+    }
     finally { setIsGenerating(false); }
   };
 
