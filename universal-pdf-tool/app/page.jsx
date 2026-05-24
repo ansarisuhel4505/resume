@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Dropzone from "../components/features/Dropzone";
 
-// === SAARE TOOLS IMPORT HO GAYE ===
 import PdfMerger from "../components/features/PdfMerger";
 import OcrExtractor from "../components/features/OcrExtractor";
 import FileConverter from "../components/features/FileConverter";
 import PdfCompressor from "../components/features/PdfCompressor";
 import AiPdfChat from "../components/features/AiPdfChat";
 import PdfEditor from "../components/features/PdfEditor";
+// Pro tool import kiya
+import MicrosoftOfficeSuite from "../components/features/MicrosoftOfficeSuite";
 
 import { 
   ArrowRightLeft, Layers, Minimize, 
@@ -18,6 +19,7 @@ import {
 import { motion } from "framer-motion";
 
 const tools = [
+  { id: "pro", name: "Microsoft Office Pro", icon: Zap, desc: "Native conversion DOCX, XLSX, PPTX through automation", color: "text-amber-500", bg: "bg-amber-100 dark:bg-amber-900/30", type: 'pro' },
   { id: "convert", name: "Universal Convert", icon: ArrowRightLeft, desc: "PDF to Word, Images, PPT & vice versa", color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-900/30" },
   { id: "merge", name: "Merge & Split", icon: Layers, desc: "Combine multiple PDFs or extract pages", color: "text-emerald-500", bg: "bg-emerald-100 dark:bg-emerald-900/30" },
   { id: "ocr", name: "OCR Extractor", icon: ScanText, desc: "Extract text from scanned documents", color: "text-rose-500", bg: "bg-rose-100 dark:bg-rose-900/30" },
@@ -30,23 +32,22 @@ export default function HomePage() {
   const [activeTool, setActiveTool] = useState(tools[0]);
   const [files, setFiles] = useState([]);
 
-  // DUMMY FUNCTION GONE! Saare features ab real hain.
-
   return (
     <div className="flex flex-col lg:flex-row gap-8 pb-12">
       
       {/* Left Sidebar: Tool Selection */}
       <div className="w-full lg:w-1/3 flex flex-col gap-4">
         <div className="bg-white dark:bg-darkCard p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center gap-2 mb-6">
+          <div className="flex items-center gap-2 mb-6 border-b border-slate-200 dark:border-slate-800 pb-3">
             <Zap className="text-primary" size={20} />
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Pro Tools Suite</h2>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Universal File Pro Studio</h2>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
             {tools.map((tool) => {
               const Icon = tool.icon;
               const isActive = activeTool.id === tool.id;
+              const isPro = tool.type === 'pro';
               return (
                 <button
                   key={tool.id}
@@ -54,12 +55,13 @@ export default function HomePage() {
                     setActiveTool(tool);
                     setFiles([]); 
                   }}
-                  className={`flex items-start gap-4 p-4 rounded-xl text-left transition-all duration-200 border ${
+                  className={`flex items-start gap-4 p-4 rounded-xl text-left transition-all duration-200 border relative ${
                     isActive 
                       ? 'border-primary bg-blue-50 dark:bg-slate-800 shadow-sm ring-1 ring-primary/20' 
                       : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-slate-200 dark:hover:border-slate-700'
                   }`}
                 >
+                  {isPro && <span className="absolute top-2 right-2 text-xs font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full scale-90">PRO</span>}
                   <div className={`p-2 rounded-lg ${tool.bg} ${tool.color} shrink-0`}>
                     <Icon size={22} />
                   </div>
@@ -94,7 +96,7 @@ export default function HomePage() {
                 {activeTool.name}
               </h1>
               <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                {activeTool.desc}. Upload your files to begin.
+                {activeTool.desc}. Configure your document below.
               </p>
             </div>
             <button className="p-2 text-slate-400 hover:text-primary transition-colors bg-slate-50 dark:bg-slate-800 rounded-full hidden sm:block">
@@ -102,22 +104,28 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* Sirf AI Chat me hume Dropzone thoda alag dikhana padta hai ya normal rakhna padta hai */}
-          <div className="flex-1 flex flex-col justify-center">
-            <Dropzone 
-              files={files} 
-              setFiles={setFiles} 
-              maxFiles={activeTool.id === 'merge' ? 20 : 5} 
-            />
-          </div>
+          {/* If the Pro Suite is active, no need to show Dropzone at the start */}
+          {activeTool.type === 'pro' ? (
+              <MicrosoftOfficeSuite/>
+          ) : (
+            <>
+                <div className="flex-1 flex flex-col justify-center">
+                <Dropzone 
+                    files={files} 
+                    setFiles={setFiles} 
+                    maxFiles={activeTool.id === 'merge' ? 20 : 5} 
+                />
+                </div>
 
-          {/* === THE ULTIMATE CONNECTION: Saare tools activate ho gaye! === */}
-          {files.length > 0 && activeTool.id === 'convert' && <FileConverter files={files} />}
-          {files.length > 0 && activeTool.id === 'merge' && <PdfMerger files={files} onComplete={() => setFiles([])} />}
-          {files.length > 0 && activeTool.id === 'ocr' && <OcrExtractor files={files} />}
-          {files.length > 0 && activeTool.id === 'compress' && <PdfCompressor files={files} />}
-          {files.length > 0 && activeTool.id === 'edit' && <PdfEditor files={files} />}
-          {files.length > 0 && activeTool.id === 'ai' && <AiPdfChat files={files} />}
+                {/* === CONNECTED ASLI TOOLS === */}
+                {files.length > 0 && activeTool.id === 'convert' && <FileConverter files={files} />}
+                {files.length > 0 && activeTool.id === 'merge' && <PdfMerger files={files} onComplete={() => setFiles([])} />}
+                {files.length > 0 && activeTool.id === 'ocr' && <OcrExtractor files={files} />}
+                {files.length > 0 && activeTool.id === 'compress' && <PdfCompressor files={files} />}
+                {files.length > 0 && activeTool.id === 'edit' && <PdfEditor files={files} />}
+                {files.length > 0 && activeTool.id === 'ai' && <AiPdfChat files={files} />}
+            </>
+          )}
 
         </motion.div>
       </div>
